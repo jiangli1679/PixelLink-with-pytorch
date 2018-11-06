@@ -2,6 +2,12 @@ import torch
 import cv2
 import numpy as np
 import torch.nn as nn
+DEBUG = False
+if DEBUG:
+    import visdom
+    vis = visdom.Visdom()
+    vis.close()
+
 
 def mask_filter(pixel_mask, link_mask, neighbors=8, scale=4):
     """
@@ -32,6 +38,7 @@ def mask_filter(pixel_mask, link_mask, neighbors=8, scale=4):
     link_neighbors = link_neighbors.cpu().numpy()
     return pixel_class, link_neighbors
 
+
 def mask_to_box(pixel_mask, link_mask, neighbors=8, scale=4):
     """
     pixel_mask: batch_size * 2 * H * W
@@ -49,6 +56,11 @@ def mask_to_box(pixel_mask, link_mask, neighbors=8, scale=4):
     mask_width = link_mask.size(3)
     pixel_class = nn.Softmax2d()(pixel_mask)
     # print(pixel_class.shape)
+    if DEBUG:
+        text_score = pixel_class[0, 1].cpu().numpy()
+        vis.image(text_score, opts=dict(caption='text pred'))
+        vis.image((text_score > 0.7).astype(np.float32), opts=dict(caption='text pred bool'))
+
     pixel_class = pixel_class[:, 1] > 0.7
     # pixel_class = pixel_mask[:, 1] > pixel_mask[:, 0]
     # link_neighbors = torch.ByteTensor([batch_size, neighbors, mask_height, mask_width])
@@ -58,10 +70,18 @@ def mask_to_box(pixel_mask, link_mask, neighbors=8, scale=4):
     for i in range(neighbors):
         # print(link_mask[:, [2 * i, 2 * i + 1]].shape)
         tmp = nn.Softmax2d()(link_mask[:, [2 * i, 2 * i + 1]])
+        if DEBUG:
+            vis.image(tmp[0, 1].cpu().numpy(), opts=dict(caption='neighbor %d' % i))
+            vis.image((tmp[0, 1].cpu().numpy() > 0).astype(np.float32),
+                      opts=dict(caption='neighbor %d' % i))
+
         # print(tmp.shape)
         link_neighbors[:, i] = tmp[:, 1] > 0.7
         # link_neighbors[:, i] = link_mask[:, 2 * i + 1] > link_mask[:, 2 * i] 
         link_neighbors[:, i] = link_neighbors[:, i] & pixel_class
+        if DEBUG:
+            vis.image(link_neighbors[0, i].cpu().numpy(), opts=dict(caption='neighbor %d' % i))
+
     # res_mask = np.zeros([batch_size, mask_height, mask_width], dtype=np.uint8)
     all_boxes = []
     # res_masks = []
@@ -93,6 +113,7 @@ def mask_to_box(pixel_mask, link_mask, neighbors=8, scale=4):
         all_boxes.append(bounding_boxes)
     return all_boxes
 
+
 def get_neighbors(h_index, w_index):
     res = []
     res.append((h_index - 1, w_index - 1))
@@ -104,6 +125,7 @@ def get_neighbors(h_index, w_index):
     res.append((h_index + 1, w_index - 1))
     res.append((h_index, w_index - 1))
     return res
+
 
 def func(pixel_cls, link_cls):
     def joint(pointa, pointb):

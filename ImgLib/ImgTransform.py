@@ -4,6 +4,7 @@ import random
 import math
 import copy
 
+
 def ReadImage(filename, output_format="numpy", order="HWC", color_format="RGB"):
     """
     filename: filepath+filename.jpg/png/...
@@ -38,6 +39,7 @@ def ReadImage(filename, output_format="numpy", order="HWC", color_format="RGB"):
             ValueError("Unknown output_format '{}'".format(output_format))
     return
 
+
 def _ParseImage(filename=None, data=None):
     """
     parse image according to the given type
@@ -50,6 +52,7 @@ def _ParseImage(filename=None, data=None):
         raise ValueError("either filename or data should be given")
     return img
 
+
 def _ReturnImage(img, return_type):
     """
     return image according to the required type
@@ -60,6 +63,7 @@ def _ReturnImage(img, return_type):
         return img
     else:
         raise ValueError("Unknown return type")
+
 
 def RotateImage(filename=None, data=None, angle=None, return_type="numpy"):
     """
@@ -79,6 +83,7 @@ def RotateImage(filename=None, data=None, angle=None, return_type="numpy"):
         angle = angle // 90 * 90
     img = img.rotate(angle, expand=True)
     return _ReturnImage(img, return_type), angle
+
 
 def RotateImageWithLabel(labels, filename=None, data=None, angle=None, return_type="numpy"):
     """
@@ -140,6 +145,7 @@ def CropImage(filename=None, data=None, start=None, end=None, scale=None, ratio=
     img = img.crop((new_w_start, new_h_start, new_w_start + new_w, new_h_start + new_h))
     return _ReturnImage(img, return_type), start + end
 
+
 def CropImageWithLabel(labels, filename=None, data=None, start=None, end=None, scale=None, ratio=None, return_type="numpy"):
     """
     return: labels, img, img_range
@@ -162,6 +168,7 @@ def CropImageWithLabel(labels, filename=None, data=None, start=None, end=None, s
     labels["coor"] = new_label.tolist()
     return labels, img, img_range
 
+
 def ResizeImage(size, filename=None, data=None, return_type="numpy"):
     """
     either filename or data should be given
@@ -172,6 +179,7 @@ def ResizeImage(size, filename=None, data=None, return_type="numpy"):
     img = _ParseImage(filename, data)
     img = img.resize(size, resample=Image.BILINEAR)
     return _ReturnImage(img, return_type), size
+
 
 def ResizeImageWithLabel(labels, size, filename=None, data=None, return_type="numpy"):
     """
@@ -190,6 +198,7 @@ def ResizeImageWithLabel(labels, size, filename=None, data=None, return_type="nu
     labels["coor"] = new_label.tolist()
     return labels, img, size
 
+
 def ZeroMeanImage(img, r_mean, g_mean, b_mean):
     """
     img: numpy array of H*W*C
@@ -199,6 +208,7 @@ def ZeroMeanImage(img, r_mean, g_mean, b_mean):
     img[..., 1] -= g_mean
     img[..., 2] -= b_mean
     return img
+
 
 def UnzeroMeanImage(img, r_mean, g_mean, b_mean):
     """

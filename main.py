@@ -97,7 +97,15 @@ def main(retrain=False):
     res_dir = os.path.join(out_dir, 'snapshots')
     if not os.path.exists(res_dir):
         os.makedirs(res_dir)
-    shutil.copyfile(os.path.join('configs', '%s.py' % exp_name), os.path.join(out_dir, 'config.py'))
+
+    # shutil.copyfile(os.path.join('configs', '%s.py' % exp_name), os.path.join(out_dir, 'config.py'))
+    with open(os.path.join(out_dir, 'config.py'), 'w') as f:
+        params_names = config.__dir__()
+        for param_name in params_names:
+            if param_name.startswith('__'):
+                continue
+            param_value = getattr(config, param_name)
+            f.write('%s = %s\n' % (param_name, param_value))
 
     dataset = datasets.PixelLinkIC15Dataset(config.train_images_dir, config.train_labels_dir,
                                             all_trains=config.all_trains, version=config.version,

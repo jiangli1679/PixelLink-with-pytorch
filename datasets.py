@@ -98,7 +98,7 @@ class PixelLinkIC15Dataset(ICDAR15Dataset):
         if self.train:
             image, label, img_np = self.train_data_transform(index)
         else:
-            image, label = self.test_data_transform(index)
+            image, label, img_np = self.test_data_transform(index)
         image = torch.Tensor(image)
 
         pixel_mask, neg_pixel_mask, pixel_pos_weight, link_mask = \
@@ -108,7 +108,7 @@ class PixelLinkIC15Dataset(ICDAR15Dataset):
             for i_mask, mask in enumerate([pixel_mask, neg_pixel_mask]):
                 img_vis = mask.cpu().numpy().copy()
                 img_vis_resized = cv2.resize(img_vis.astype(np.float32), (image.size(1), image.size(2)))
-                vis.image(img_vis_resized)
+                #vis.image(img_vis_resized)
 
                 img_vis_resized = np.repeat(np.expand_dims(img_vis_resized.astype(np.uint8), 3), 3, axis=2)
                 img_vis_resized = np.multiply(img_vis_resized, img_np)
@@ -123,9 +123,23 @@ class PixelLinkIC15Dataset(ICDAR15Dataset):
         labels = self.all_labels[index]
         labels, img, size = ImgTransform.ResizeImageWithLabel(
             labels, (self.image_size_test[1], self.image_size_test[0]), data=img)
+
+        img_np = None
+        if DEBUG:
+            img_np = img.copy()
+            img_vis = img.copy()
+            for pts, is_ignore in zip(labels['coor'], labels['ignore']):
+                pts = np.array(pts, np.int32)
+                pts = pts.reshape((-1, 1, 2))
+                color = (255, 255, 0) if is_ignore else (255, 0, 0)
+                cv2.polylines(img_vis, [pts], True, color)
+
+            img_vis = img_vis.transpose(2, 0, 1)
+            vis.image(img_vis)
+
         img = ImgTransform.ZeroMeanImage(img, self.mean[0], self.mean[1], self.mean[2])
         img = img.transpose(2, 0, 1)
-        return img, labels
+        return img, labels, img_np
 
     def train_data_transform(self, index):
         img = self.read_image(self.images_dir, index)

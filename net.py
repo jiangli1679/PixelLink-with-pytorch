@@ -5,7 +5,7 @@ from torchvision import models
 def weight_init(m):
     if isinstance(m, nn.Conv2d):
         nn.init.xavier_uniform_(m.weight.data)
-        if m.bias:
+        if m.bias is not None:
             nn.init.constant_(m.bias.data, 0)
 
 
@@ -47,7 +47,7 @@ class PixelLinkNet(nn.Module):
 
         if add_extra_block:
             # last block (keeps the same resolution of x16)
-            feature_size = num_features[-1] * extra_block_expand
+            feature_size = int(num_features[-1] * extra_block_expand)
             extra_block = nn.Sequential()
             extra_block.add_module('pool6', nn.MaxPool2d(kernel_size=[3, 3], stride=1, padding=1))
             extra_block.add_module('conv6', nn.Conv2d(num_features[-1], feature_size, 3, stride=1, padding=6, dilation=6))
