@@ -14,6 +14,7 @@ import time
 import argparse
 import importlib
 import shutil
+import glob
 from test_model import test_on_train_dataset
 
 sys.path.append('torchsample')
@@ -35,7 +36,7 @@ config.net_params['version'] = config.version
 out_dir = "results/%s" % exp_name
 
 
-def train(epoch, iteration, dataloader, my_net, loss, optimizer, scheduler, device, start_epoch=0):
+def train(epoch, dataloader, my_net, loss, optimizer, scheduler, device, start_epoch=0):
     global trainer, callbacks_cont
 
     logs = {'batch_size': config.batch_size, 'num_batches': len(dataloader),
@@ -43,6 +44,7 @@ def train(epoch, iteration, dataloader, my_net, loss, optimizer, scheduler, devi
             'has_val_data': False, 'has_regularizers': False}
     callbacks_cont.on_train_begin(logs)
 
+    iteration = 0
     for i_epoch in range(start_epoch, epoch):
         epoch_logs = {}
         callbacks_cont.on_epoch_begin(i_epoch, epoch_logs)
@@ -76,19 +78,16 @@ def train(epoch, iteration, dataloader, my_net, loss, optimizer, scheduler, devi
 
             end = time.time()
             # print("time: " + str(end - start))
-            if (iteration + 1) % 100 == 0:
-                # if args.change:
-                #     saving_model_dir = config.saving_model_dir3
-                # else:
-                saving_model_dir = os.path.join(out_dir, 'snapshots')
-                checkpoint = {'epoch': i_epoch + 1,
-                              'state_dict': my_net.state_dict(),
-                              'optimizer': optimizer.state_dict()}
-                torch.save(checkpoint, os.path.join(saving_model_dir, str(iteration + 1) + ".mdl"))
             iteration += 1
 
             batch_logs = {'loss': total_loss.tolist()}
             callbacks_cont.on_batch_end(i_batch, batch_logs)
+
+        if i_epoch > 0 and i_epoch % 100 == 0:
+            checkpoint = {'epoch': i_epoch,
+                          'state_dict': my_net.state_dict(),
+                          'optimizer': optimizer.state_dict()}
+            torch.save(checkpoint, os.path.join(out_dir, 'snapshots', 'epoch_%08d.mdl' % i_epoch))
 
         epoch_logs.update(trainer.history.batch_metrics)
         callbacks_cont.on_epoch_end(i_epoch, logs=epoch_logs)
@@ -107,7 +106,7 @@ def main(retrain=False):
                                             image_size_test=config.image_size_test)
     # sampler = WeightedRandomSampler([1/len(dataset)]*len(dataset), config.batch_size, replacement=True)
     # dataloader = DataLoader(dataset, batch_size=config.batch_size, sampler=sampler)
-    dataloader = DataLoader(dataset, config.batch_size, shuffle=True, num_workers=0)
+    dataloader = DataLoader(dataset, config.batch_size, shuffle=True, num_workers=6)
     model = net.PixelLinkNet(**config.net_params)  #net.Net(config.version, config.dilation)
 
     if config.gpu:
@@ -121,6 +120,9 @@ def main(retrain=False):
     loss = PixelLinkLoss(config.pixel_weight, config.link_weight, config.neg_pos_ratio)
     optimizer = optim.SGD(model.parameters(), lr=config.learning_rate1, momentum=config.momentum, weight_decay=config.weight_decay)
     epoch_milestone = math.ceil(config.step2_start / len(dataloader))
+    print('LR schedule')
+    print('[%05d - %05d] : %E' % (0, epoch_milestone, config.learning_rate1))
+    print('[%05d - %05d] : %E' % (epoch_milestone, config.epoch, config.learning_rate2))
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, [epoch_milestone], config.learning_rate2 / config.learning_rate1)
 
     global trainer, callbacks_cont
@@ -138,23 +140,33 @@ def main(retrain=False):
     callbacks_cont.set_trainer(trainer)
 
     if retrain:
-        start_epoch = config.retrain_model_index
-        checkpoint = torch.load(os.path.join(out_dir, 'snapshots', '%d.mdl' % start_epoch))
-        model.load_state_dict(checkpoint['state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
+        # find latest snapshot
+        snapshots_dir = os.path.join(out_dir, 'snapshots')
+        model_files = glob.glob(snapshots_dir + '/epoch_*')
+        if model_files:
+            resume_path = sorted(model_files)[-1]
+            start_epoch = int(os.path.basename(resume_path)[len('epoch_'):-4])
+            print('Loading snapshot from : %s' % resume_path)
+            checkpoint = torch.load(resume_path)
+            model.load_state_dict(checkpoint['state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer'])
+        else:
+            # couldnt find snapshots
+            start_epoch = 0
     else:
         start_epoch = 0
 
-    iteration = 0
-
-    train(config.epoch, iteration, dataloader, model, loss, optimizer, scheduler, device, start_epoch=start_epoch)
+    train(config.epoch, dataloader, model, loss, optimizer, scheduler, device, start_epoch=start_epoch)
 
 
 if __name__ == "__main__":
     if args.retrain or args.train:
         main(retrain=args.retrain)
     else:
-        test_on_train_dataset(out_dir, config.test_model_index, config.train_images_dir, config.train_labels_dir,
+        epoch = config.test_model_index
+        model = net.PixelLinkNet(**config.net_params)
+
+        test_on_train_dataset(model, out_dir, epoch, config.train_images_dir, config.train_labels_dir,
                           config.all_trains, config.mean, config.version,
                           image_size_train=config.image_size_train,
                           image_size_test=config.image_size_test,

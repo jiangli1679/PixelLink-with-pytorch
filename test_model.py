@@ -70,7 +70,7 @@ def comp_gt_and_output(my_labels, gt_labels, threshold):
     return true_pos, false_pos, false_neg
 
 
-def test_on_train_dataset(out_dir, test_model_index, train_images_dir, train_labels_dir, all_trains,
+def test_on_train_dataset(my_net, out_dir, epoch, train_images_dir, train_labels_dir, all_trains,
                           mean, version,
                           image_size_train=(512, 512),
                           image_size_test=(512, 512),
@@ -81,7 +81,6 @@ def test_on_train_dataset(out_dir, test_model_index, train_images_dir, train_lab
                                             image_size_train=image_size_train,
                                             image_size_test=image_size_test)
     # dataloader = DataLoader(dataset, batch_size=config.batch_size, shuffle=False)
-    my_net = net.Net()
     if gpu:
         device = torch.device("cuda:0")
         my_net = my_net.cuda()
@@ -89,9 +88,13 @@ def test_on_train_dataset(out_dir, test_model_index, train_images_dir, train_lab
             my_net = nn.DataParallel(my_net)
     else:
         device = torch.device("cpu")
-    checkpoint = torch.load(os.path.join(out_dir, 'snapshots', '%d.mdl' % test_model_index))
+    checkpoint = torch.load(os.path.join(out_dir, 'snapshots', 'epoch_%08d.mdl' % epoch))
     my_net.load_state_dict(checkpoint['state_dict'])
     my_net.eval()
+
+    results_dir = os.path.join(out_dir, 'test_e%08d' % epoch)
+    if not os.path.exists(results_dir):
+        os.makedirs(results_dir)
 
     true_pos, true_neg, false_pos, false_neg = [0] * 4
     for i in range(len(dataset)):
@@ -108,7 +111,7 @@ def test_on_train_dataset(out_dir, test_model_index, train_images_dir, train_lab
             image = ImgFormat.ImgColorFormat(image, from_color="RGB", to_color="BGR")
             image = visualize_label(image, my_labels, color=(0, 255, 0))
             # image = visualize_label(image, sample["label"]["coor"], color=(255, 0, 0))
-            cv2.imwrite("img_%d.jpg" % i, image)
+            cv2.imwrite("%s/img_%d.jpg" % (results_dir, i), image)
         true_pos += res[0]
         false_pos += res[1]
         false_neg += res[2]
@@ -121,7 +124,16 @@ def test_on_train_dataset(out_dir, test_model_index, train_images_dir, train_lab
         else:
             recall = 0
         print("i: %d, TP: %d, FP: %d, FN: %d, precision: %f, recall: %f" % (i, true_pos, false_pos, false_neg, precision, recall))
-    print('#positives=%d' % (true_pos + false_neg))
+
+    perf_str = "TP: %d, FP: %d, FN: %d, precision: %f, recall: %f (P=%d)" % (
+        true_pos, false_pos, false_neg, precision, recall, (true_pos + false_neg))
+    os.system('echo "%s" > %s' % (perf_str, os.path.join(results_dir, 'performance.txt')))
+
+    perf_str2 = "%d, %d,%d,%d,%f,%f" % (epoch, true_pos, false_pos, false_neg, precision, recall)
+    test_file = os.path.join(out_dir, 'test.csv')
+    if not os.path.exists(test_file):
+        os.system('echo "epoch,TP,FP,FN,precision,recall" > %s' % test_file)
+    os.system('echo "%s" >> %s' % (perf_str2, test_file))
 
 
 def visualize_label(img, boxes, color=(0, 255, 0)):
