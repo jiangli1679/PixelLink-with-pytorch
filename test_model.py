@@ -1,7 +1,6 @@
 import postprocess
 import cv2
 import numpy as np
-import config
 import datasets
 import torch
 from torch.utils.data import DataLoader
@@ -9,13 +8,16 @@ import net
 import torch.nn as nn
 import ImgLib.ImgFormat as ImgFormat
 import ImgLib.ImgTransform as ImgTransform
+import os
 
-def cal_label_on_batch(my_net, imgs):
-    scale = 2 if config.version == "2s" else 4
+
+def cal_label_on_batch(my_net, imgs, version="2s"):
+    scale = 2 if version == "2s" else 4
     with torch.no_grad():
         out_1, out_2 = my_net.forward(imgs)
     all_boxes = postprocess.mask_to_box(out_1, out_2, scale=scale)
     return all_boxes
+
 
 def cal_IOU(box1, box2):
     """
@@ -42,6 +44,7 @@ def cal_IOU(box1, box2):
     intersction = box1_area + box2_area - union
     return intersction / union
 
+
 def comp_gt_and_output(my_labels, gt_labels, threshold):
     """
     return: [true_pos, false_pos, false_neg]
@@ -66,18 +69,30 @@ def comp_gt_and_output(my_labels, gt_labels, threshold):
             false_neg += 1
     return true_pos, false_pos, false_neg
 
-def test_on_train_dataset(vis_per_img=10):
-    dataset = datasets.PixelLinkIC15Dataset(config.train_images_dir, config.train_labels_dir, train=False)
+
+def test_on_train_dataset(out_dir, test_model_index, train_images_dir, train_labels_dir, all_trains,
+                          mean, version,
+                          image_size_train=(512, 512),
+                          image_size_test=(512, 512),
+                          vis_per_img=10,
+                          gpu=True, multi_gpu=False):
+    dataset = datasets.PixelLinkIC15Dataset(train_images_dir, train_labels_dir, train=False,
+                                            all_trains=all_trains, version=version, mean=mean,
+                                            image_size_train=image_size_train,
+                                            image_size_test=image_size_test)
     # dataloader = DataLoader(dataset, batch_size=config.batch_size, shuffle=False)
     my_net = net.Net()
-    if config.gpu:
+    if gpu:
         device = torch.device("cuda:0")
         my_net = my_net.cuda()
-        if config.multi_gpu:
+        if multi_gpu:
             my_net = nn.DataParallel(my_net)
     else:
         device = torch.device("cpu")
-    my_net.load_state_dict(torch.load(config.saving_model_dir + '%d.mdl' % config.test_model_index))
+    checkpoint = torch.load(os.path.join(out_dir, 'snapshots', '%d.mdl' % test_model_index))
+    my_net.load_state_dict(checkpoint['state_dict'])
+    my_net.eval()
+
     true_pos, true_neg, false_pos, false_neg = [0] * 4
     for i in range(len(dataset)):
         sample = dataset[i]
@@ -89,10 +104,10 @@ def test_on_train_dataset(vis_per_img=10):
         if i % vis_per_img == 0:
             image = image.squeeze(0).cpu().numpy()
             image = ImgFormat.ImgOrderFormat(image, from_order="CHW", to_order="HWC")
-            image = ImgTransform.UnzeroMeanImage(image, config.r_mean, config.g_mean, config.b_mean)
+            image = ImgTransform.UnzeroMeanImage(image, mean[0], mean[1], mean[2])
             image = ImgFormat.ImgColorFormat(image, from_color="RGB", to_color="BGR")
             image = visualize_label(image, my_labels, color=(0, 255, 0))
-            image = visualize_label(image, sample["label"]["coor"], color=(255, 0, 0))
+            # image = visualize_label(image, sample["label"]["coor"], color=(255, 0, 0))
             cv2.imwrite("img_%d.jpg" % i, image)
         true_pos += res[0]
         false_pos += res[1]
@@ -106,6 +121,8 @@ def test_on_train_dataset(vis_per_img=10):
         else:
             recall = 0
         print("i: %d, TP: %d, FP: %d, FN: %d, precision: %f, recall: %f" % (i, true_pos, false_pos, false_neg, precision, recall))
+    print('#positives=%d' % (true_pos + false_neg))
+
 
 def visualize_label(img, boxes, color=(0, 255, 0)):
     """

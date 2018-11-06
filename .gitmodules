@@ -1,0 +1,3 @@
+[submodule "torchsample"]
+	path = torchsample
+	url = https://github.com/ncullen93/torchsample

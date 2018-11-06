@@ -1,6 +1,5 @@
 from torch.utils.data import Dataset
 from PIL import Image
-import config
 import torch
 import codecs
 import random
@@ -14,12 +13,19 @@ from torchvision import transforms
 import ImgLib.ImgTransform as ImgTransform
 import ImgLib.util
 
+DEBUG = False
+if DEBUG:
+    import visdom
+    vis = visdom.Visdom()
+    vis.close()
+
+
 class ICDAR15Dataset(Dataset):
-    def __init__(self, images_dir, labels_dir):
-        # self.all_images = self.read_datasets(images_dir, config.all_trains)
+    def __init__(self, images_dir, labels_dir, all_trains):
+        # self.all_images = self.read_datasets(images_dir, all_trains)
         self.images_dir = images_dir
         self.labels_dir = labels_dir
-        self.all_labels = self.read_labels(labels_dir, config.all_trains)
+        self.all_labels = self.read_labels(labels_dir, all_trains)
 
     def __len__(self):
         return len(self.all_labels)
@@ -72,30 +78,52 @@ class ICDAR15Dataset(Dataset):
                 res[i-1] = tmp
         return res
 
+
 class PixelLinkIC15Dataset(ICDAR15Dataset):
-    def __init__(self, images_dir, labels_dir, train=True):
-        super(PixelLinkIC15Dataset, self).__init__(images_dir, labels_dir)
+    def __init__(self, images_dir, labels_dir, all_trains=1000, train=True, version="2s",
+                 mean=(123., 117., 104.), use_rotate=False, use_crop=False,
+                 image_size_train=(512, 512), image_size_test=(512, 512)):
+        super(PixelLinkIC15Dataset, self).__init__(images_dir, labels_dir, all_trains)
         self.train = train
+        self.version = version
+        self.mean = mean
+        self.use_rotate = use_rotate
+        self.use_crop = use_crop
+        self.image_size_train = image_size_train
+        self.image_size_test = image_size_test
         # self.all_images = torch.Tensor(self.all_images)
 
     def __getitem__(self, index):
         # print(index, end=" ")
         if self.train:
-            image, label = self.train_data_transform(index)
+            image, label, img_np = self.train_data_transform(index)
         else:
             image, label = self.test_data_transform(index)
         image = torch.Tensor(image)
 
         pixel_mask, neg_pixel_mask, pixel_pos_weight, link_mask = \
-            PixelLinkIC15Dataset.label_to_mask_and_pixel_pos_weight(label, list(image.shape[1:]), version=config.version)
+            PixelLinkIC15Dataset.label_to_mask_and_pixel_pos_weight(label, list(image.shape[1:]), version=self.version)
+
+        if DEBUG:
+            for i_mask, mask in enumerate([pixel_mask, neg_pixel_mask]):
+                img_vis = mask.cpu().numpy().copy()
+                img_vis_resized = cv2.resize(img_vis.astype(np.float32), (image.size(1), image.size(2)))
+                vis.image(img_vis_resized)
+
+                img_vis_resized = np.repeat(np.expand_dims(img_vis_resized.astype(np.uint8), 3), 3, axis=2)
+                img_vis_resized = np.multiply(img_vis_resized, img_np)
+                img_vis_resized = img_vis_resized.transpose(2, 0, 1)
+                vis.image(img_vis_resized)
+
         return {'image': image, 'pixel_mask': pixel_mask, 'neg_pixel_mask': neg_pixel_mask, 'label': label,
                 'pixel_pos_weight': pixel_pos_weight, 'link_mask': link_mask}
 
     def test_data_transform(self, index):
         img = self.read_image(self.images_dir, index)
         labels = self.all_labels[index]
-        labels, img, size = ImgTransform.ResizeImageWithLabel(labels, (512, 512), data=img)
-        img = ImgTransform.ZeroMeanImage(img, config.r_mean, config.g_mean, config.b_mean)
+        labels, img, size = ImgTransform.ResizeImageWithLabel(
+            labels, (self.image_size_test[1], self.image_size_test[0]), data=img)
+        img = ImgTransform.ZeroMeanImage(img, self.mean[0], self.mean[1], self.mean[2])
         img = img.transpose(2, 0, 1)
         return img, labels
 
@@ -103,8 +131,8 @@ class PixelLinkIC15Dataset(ICDAR15Dataset):
         img = self.read_image(self.images_dir, index)
         labels = self.all_labels[index]
 
-        rotate_rand = random.random() if config.use_rotate else 0
-        crop_rand = random.random() if config.use_crop else 0
+        rotate_rand = random.random() if self.use_rotate else 0
+        crop_rand = random.random() if self.use_crop else 0
         # rotate
         if rotate_rand > 0.5:
             labels, img, angle = ImgTransform.RotateImageWithLabel(labels, data=img)
@@ -112,16 +140,33 @@ class PixelLinkIC15Dataset(ICDAR15Dataset):
         if crop_rand > 0.5:
             scale = 0.1 + random.random() * 0.9
             labels, img, img_range = ImgTransform.CropImageWithLabel(labels, data=img, scale=scale)
+            labels = PixelLinkIC15Dataset.filter_labels(labels, method="msi")
             labels = PixelLinkIC15Dataset.filter_labels(labels, method="rai")
+
         # resize
-        labels, img, size = ImgTransform.ResizeImageWithLabel(labels, (512, 512), data=img)
+        labels, img, size = ImgTransform.ResizeImageWithLabel(
+            labels, (self.image_size_train[1], self.image_size_train[0]), data=img)
         # filter unsatifactory labels
         # labels = PixelLinkIC15Dataset.filter_labels(labels, method="msi")
+
+        img_np = None
+        if DEBUG:
+            img_np = img.copy()
+            img_vis = img.copy()
+            for pts, is_ignore in zip(labels['coor'], labels['ignore']):
+                pts = np.array(pts, np.int32)
+                pts = pts.reshape((-1, 1, 2))
+                color = (255, 255, 0) if is_ignore else (255, 0, 0)
+                cv2.polylines(img_vis, [pts], True, color)
+
+            img_vis = img_vis.transpose(2, 0, 1)
+            vis.image(img_vis)
+
         # zero mean
-        img = ImgTransform.ZeroMeanImage(img, config.r_mean, config.g_mean, config.b_mean)
+        img = ImgTransform.ZeroMeanImage(img, self.mean[0], self.mean[1], self.mean[2])
         # HWC to CHW
         img = img.transpose(2, 0, 1)
-        return img, labels
+        return img, labels, img_np
 
     @staticmethod
     def filter_labels(labels, method):
@@ -130,6 +175,7 @@ class PixelLinkIC15Dataset(ICDAR15Dataset):
         """
         def distance(a, b):
             return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2
+
         def min_side_ignore(label):
             label = np.array(label).reshape(4, 2)
             dists = []
@@ -251,6 +297,7 @@ class PixelLinkIC15Dataset(ICDAR15Dataset):
         pixel_mask = np.zeros(pixel_mask_size, dtype=np.uint8)
         pixel_weight = np.zeros(pixel_mask_size, dtype=np.float)
         link_mask = np.zeros(link_mask_size, dtype=np.uint8)
+        pixel_mask_ignore = np.zeros(pixel_mask_size, dtype=np.uint8)
         # if label.shape[0] == 0:
             # return torch.LongTensor(pixel_mask), torch.Tensor(pixel_weight), torch.LongTensor(link_mask)
         label = (label / factor).astype(int) # label's coordinate value should be divided
@@ -259,11 +306,16 @@ class PixelLinkIC15Dataset(ICDAR15Dataset):
         real_box_num = 0
         # area_per_box = []
         for i in range(label.shape[0]):
+            pixel_mask_tmp = np.zeros(pixel_mask_size, dtype=np.uint8)
+            cv2.drawContours(pixel_mask_tmp, label[i], -1, 1, thickness=-1)
             if not ignore[i]:
-                pixel_mask_tmp = np.zeros(pixel_mask_size, dtype=np.uint8)
-                cv2.drawContours(pixel_mask_tmp, label[i], -1, 1, thickness=-1)
                 pixel_mask += pixel_mask_tmp
-        neg_pixel_mask = (pixel_mask == 0).astype(np.uint8)
+            else:
+                pixel_mask_ignore += pixel_mask_tmp
+
+        # PAY ATTENTION : negative pixels are pixels which are both not positive and not ignored
+        neg_pixel_mask = (np.logical_and(pixel_mask == 0, pixel_mask_ignore == 0)).astype(np.uint8)
+        # PAY ATTENTION : overlapping areas arent tagged as positive
         pixel_mask[pixel_mask != 1] = 0
         # assert not (pixel_mask>1).any()
         pixel_mask_area = np.count_nonzero(pixel_mask) # total area
@@ -320,6 +372,7 @@ class PixelLinkIC15Dataset(ICDAR15Dataset):
                     # +0 to convert bool array to int array
                     link_mask[j] += np.logical_and(link_mask_tmp, link_mask_shift[j]).astype(np.uint8)
         return [torch.LongTensor(pixel_mask), torch.LongTensor(neg_pixel_mask), torch.Tensor(pixel_weight), torch.LongTensor(link_mask)]
+
 
 if __name__ == '__main__':
     start = time.time()

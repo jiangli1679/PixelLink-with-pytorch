@@ -1,9 +1,14 @@
 import torch
 import torch.nn as nn
-import config
 
-class PixelLinkLoss(object):
-    def __init__(self):
+
+class PixelLinkLoss(nn.Module):
+    def __init__(self, pixel_term_weight=1.0, link_term_weight=1.0, neg_pos_ratio=3.0):
+        super(PixelLinkLoss, self).__init__()
+        self.pixel_term_weight = pixel_term_weight
+        self.link_term_weight = link_term_weight
+        self.neg_pos_ratio = neg_pos_ratio
+
         self.pixel_cross_entropy_layer = nn.CrossEntropyLoss(reduce=False)
         self.link_cross_entropy_layer = nn.CrossEntropyLoss(reduce=False)
         # self.pixel_cross_entropy_layer = nn.BCELoss(reduce=False)
@@ -34,18 +39,20 @@ class PixelLinkLoss(object):
         self.neg_area = torch.zeros_like(self.area, dtype=torch.int)
         for i in range(batch_size):
             # wrong_input = softmax_input[i, 0][target[i]==0].view(-1)
-            wrong_input = softmax_input[i, 0][neg_pixel_masks[i]==1].view(-1)
+            # background score for negative pixels
+            wrong_input = softmax_input[i, 0][neg_pixel_masks[i] == 1].view(-1)
             # print("k: " + str(int_area[i] * config.neg_pos_ratio))
-            r_pos_area = int_area[i] * config.neg_pos_ratio
+            r_pos_area = int_area[i] * self.neg_pos_ratio
             if r_pos_area == 0:
                 r_pos_area = 10000
             self.neg_area[i] = min(r_pos_area, wrong_input.size(0))
             # the smaller the wrong_input is, the bigger the loss is
             topk, _ = torch.topk(-wrong_input, self.neg_area[i].tolist()) # top_k is negative
             self.neg_pixel_weight[i][softmax_input[i, 0] <= -topk[-1]] = 1
-            self.neg_pixel_weight[i] = self.neg_pixel_weight[i] & (neg_pixel_masks[i]==1)
-            # print("neg area should be %d" % self.neg_area[i].tolist(), end=", ")
-            # print("neg area is %d" % self.neg_pixel_weight[i].sum().tolist())
+            self.neg_pixel_weight[i] = self.neg_pixel_weight[i] & (neg_pixel_masks[i] == 1)
+            #print("neg area should be %d" % self.neg_area[i].tolist())
+            #print("neg area is %d" % self.neg_pixel_weight[i].sum().tolist())
+
         # print("pos weight %f" % torch.sum(self.pos_pixel_weight).tolist(), end="")
         # print("neg weight %f" % torch.sum(self.neg_pixel_weight).tolist())
         self.pixel_weight = self.pos_pixel_weight + self.neg_pixel_weight.to(torch.float)
@@ -54,15 +61,14 @@ class PixelLinkLoss(object):
 
         weighted_pixel_cross_entropy_neg = self.neg_pixel_weight.to(torch.float) * self.pixel_cross_entropy
         weighted_pixel_cross_entropy_neg = weighted_pixel_cross_entropy_neg.view(batch_size, -1)
-        weighted_pixel_cross_entropy = weighted_pixel_cross_entropy_neg + weighted_pixel_cross_entropy_pos
 
-        return [torch.mean(torch.sum(weighted_pixel_cross_entropy_pos, dim=1) / \
-                (self.area + self.neg_area.to(torch.float))),
-                torch.mean(torch.sum(weighted_pixel_cross_entropy_neg, dim=1) / \
-                (self.area + self.neg_area.to(torch.float))),
-                ]
+        return [torch.mean(torch.sum(weighted_pixel_cross_entropy_pos, dim=1) / (
+                           self.area + self.neg_area.to(torch.float))),
+                torch.mean(torch.sum(weighted_pixel_cross_entropy_neg, dim=1) / (
+                           self.area + self.neg_area.to(torch.float)))]
 
     def link_loss(self, input, target, neighbors=8):
+        assert input.size(1) == 2 * neighbors
         batch_size = input.size(0)
         self.pos_link_weight = (target == 1).to(torch.float) * \
             self.pos_pixel_weight.unsqueeze(1).expand(-1, neighbors, -1, -1)
@@ -73,7 +79,6 @@ class PixelLinkLoss(object):
 
         self.link_cross_entropy = self.pos_link_weight.new_empty(self.pos_link_weight.size())
         for i in range(neighbors):
-            assert input.size(1) == 16
             # input = input.contiguous()
             this_input = input[:, [2 * i, 2 * i + 1]]
             # this_input = self.softmax_layer(this_input)
@@ -102,3 +107,11 @@ class PixelLinkLoss(object):
         # import IPython
         # IPython.embed()
         return torch.mean(loss_link_pos), torch.mean(loss_link_neg)
+
+    def forward(self, out_cls, out_link, pixel_masks, link_masks, neg_pixel_masks, pixel_pos_weights):
+        pixel_loss_pos, pixel_loss_neg = self.pixel_loss(out_cls, pixel_masks, neg_pixel_masks, pixel_pos_weights)
+        pixel_loss = pixel_loss_pos + pixel_loss_neg
+        link_loss_pos, link_loss_neg = self.link_loss(out_link, link_masks)
+        link_loss = link_loss_pos + link_loss_neg
+        loss = self.pixel_term_weight * pixel_loss + self.link_term_weight * link_loss
+        return loss, pixel_loss, link_loss
