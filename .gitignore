@@ -4,3 +4,4 @@
 test_images/
 train_images/
 .*.*
+results/

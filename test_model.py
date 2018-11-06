@@ -109,9 +109,10 @@ def test_on_train_dataset(my_net, out_dir, epoch, train_images_dir, train_labels
             image = ImgFormat.ImgOrderFormat(image, from_order="CHW", to_order="HWC")
             image = ImgTransform.UnzeroMeanImage(image, mean[0], mean[1], mean[2])
             image = ImgFormat.ImgColorFormat(image, from_color="RGB", to_color="BGR")
-            image = visualize_label(image, sample["label"]["coor"], color=(255, 0, 0),
+            # color : gt = red, ignore = yellow, detection = blue
+            image = visualize_label(image, sample["label"]["coor"], color=(0, 0, 255),
                                     ignore=sample["label"]["ignore"])
-            image = visualize_label(image, my_labels, color=(0, 0, 255))
+            image = visualize_label(image, my_labels, color=(255, 0, 0))
             cv2.imwrite("%s/img_%d.jpg" % (results_dir, i), image)
         true_pos += res[0]
         false_pos += res[1]
