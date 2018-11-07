@@ -15,16 +15,17 @@ import argparse
 import importlib
 import shutil
 import glob
-from test_model import test_on_train_dataset
+from test_model import test
 
 sys.path.append('torchsample')
 from torchsample import callbacks
 from torchsample.modules import ModuleTrainer
 
 parser = argparse.ArgumentParser(description='')
+parser.add_argument('exp', type=str, help='experiment name')
 parser.add_argument('--train', type=bool, default=False, help='True for train, False for test')  # default for test
 parser.add_argument('--retrain', type=bool, default=False, help='True for retrain, False for train')  # default for test
-parser.add_argument('--exp', type=str, default='baseline_2s', help='experiment name')
+parser.add_argument('--test', type=bool, default=False, help='True for evaluating on test set')
 # parser.add_argument('change', metavar='N', type=int, help='an integer for change')
 args = parser.parse_args()
 
@@ -175,9 +176,21 @@ if __name__ == "__main__":
         model = net.PixelLinkNet(**config.net_params)
 
         vis_per_img = int(math.ceil(config.all_trains / 100.0))
-        test_on_train_dataset(model, out_dir, epoch, config.train_images_dir, config.train_labels_dir,
-                          config.all_trains, config.mean, config.version,
-                          image_size_train=config.image_size_train,
-                          image_size_test=config.image_size_test,
-                          gpu=config.gpu, multi_gpu=config.multi_gpu, vis_per_img=vis_per_img)
+
+        if args.test:
+            images_dir = config.test_images_dir
+            labels_dir = config.test_labels_dir
+            num_images = config.all_tests
+            results_dir = os.path.join(out_dir, 'benchmark-test_e%08d' % epoch)
+        else:
+            images_dir = config.train_images_dir
+            labels_dir = config.train_labels_dir
+            num_images = config.all_trains
+            results_dir = os.path.join(out_dir, 'benchmark-train_e%08d' % epoch)
+
+        test(model, out_dir, epoch, results_dir,
+             images_dir, labels_dir, num_images,
+             config.mean, config.version,
+             image_size=config.image_size_test,
+             gpu=config.gpu, multi_gpu=config.multi_gpu, vis_per_img=vis_per_img)
         # test_model()

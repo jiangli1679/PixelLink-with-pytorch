@@ -70,16 +70,13 @@ def comp_gt_and_output(my_labels, gt_labels, threshold):
     return true_pos, false_pos, false_neg
 
 
-def test_on_train_dataset(my_net, out_dir, epoch, train_images_dir, train_labels_dir, all_trains,
-                          mean, version,
-                          image_size_train=(512, 512),
-                          image_size_test=(512, 512),
-                          vis_per_img=10,
-                          gpu=True, multi_gpu=False):
-    dataset = datasets.PixelLinkIC15Dataset(train_images_dir, train_labels_dir, train=False,
-                                            all_trains=all_trains, version=version, mean=mean,
-                                            image_size_train=image_size_train,
-                                            image_size_test=image_size_test)
+def test(my_net, exp_dir, epoch, results_dir,
+         images_dir, labels_dir, num_images,
+         mean, version, image_size=(512, 512),
+         gpu=True, multi_gpu=False, vis_per_img=10):
+    dataset = datasets.PixelLinkIC15Dataset(images_dir, labels_dir, train=False,
+                                            all_trains=num_images, version=version, mean=mean,
+                                            image_size_test=image_size)
     # dataloader = DataLoader(dataset, batch_size=config.batch_size, shuffle=False)
     if gpu:
         device = torch.device("cuda:0")
@@ -88,11 +85,10 @@ def test_on_train_dataset(my_net, out_dir, epoch, train_images_dir, train_labels
             my_net = nn.DataParallel(my_net)
     else:
         device = torch.device("cpu")
-    checkpoint = torch.load(os.path.join(out_dir, 'snapshots', 'epoch_%08d.mdl' % epoch))
+    checkpoint = torch.load(os.path.join(exp_dir, 'snapshots', 'epoch_%08d.mdl' % epoch))
     my_net.load_state_dict(checkpoint['state_dict'])
     my_net.eval()
 
-    results_dir = os.path.join(out_dir, 'test_e%08d' % epoch)
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
 
@@ -131,7 +127,7 @@ def test_on_train_dataset(my_net, out_dir, epoch, train_images_dir, train_labels
     os.system('echo "%s" > %s' % (perf_str, os.path.join(results_dir, 'performance.txt')))
 
     perf_str2 = "%d, %d,%d,%d,%f,%f" % (epoch, true_pos, false_pos, false_neg, precision, recall)
-    test_file = os.path.join(out_dir, 'test.csv')
+    test_file = os.path.join(exp_dir, 'performance-%s.csv' % images_dir.split('/')[0])
     if not os.path.exists(test_file):
         os.system('echo "epoch,TP,FP,FN,precision,recall" > %s' % test_file)
     os.system('echo "%s" >> %s' % (perf_str2, test_file))

@@ -36,10 +36,8 @@ train_labels_dir = "train_images/ground_truth/"
 retrain_model_index = 26200 # retrain from which model, e.g. ${saving_model_dir}/156600.mdl
 test_model_index = 43800 # test for which model, e.g. ${saving_model_dir}/156600.mdl
 test_batch = 1
-# saving_model_dir1 = "standard_models/"
-# saving_model_dir2 = "change_models/"
-# saving_model_dir3 = "change_models_without_replacement/"
 
-retrain_epoch = 60000
-retrain_learning_rate = 1e-2
-retrain_learning_rate2 = 3e-3
+test_images_dir = "test_images/images/"
+test_labels_dir = "test_images/ground_truth/"
+all_tests = 500
+
