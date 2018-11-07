@@ -120,16 +120,16 @@ def test(my_net, exp_dir, epoch, results_dir,
             recall = true_pos / (true_pos + false_neg)
         else:
             recall = 0
-        print("i: %d, TP: %d, FP: %d, FN: %d, precision: %f, recall: %f" % (i, true_pos, false_pos, false_neg, precision, recall))
+        F = 0
+        if (precision + recall) > 0:
+            F = 2 * precision * recall / (precision + recall)
+        print("i: %d, TP: %d, FP: %d, FN: %d, precision: %f, recall: %f, F=%f" % (
+            i, true_pos, false_pos, false_neg, precision, recall, F))
 
-    perf_str = "TP: %d, FP: %d, FN: %d, precision: %f, recall: %f (P=%d)" % (
-        true_pos, false_pos, false_neg, precision, recall, (true_pos + false_neg))
-    os.system('echo "%s" > %s' % (perf_str, os.path.join(results_dir, 'performance.txt')))
-
-    perf_str2 = "%d, %d,%d,%d,%f,%f" % (epoch, true_pos, false_pos, false_neg, precision, recall)
+    perf_str2 = "%d, %d,%d,%d,%f,%f,%f" % (epoch, true_pos, false_pos, false_neg, precision, recall, F)
     test_file = os.path.join(exp_dir, 'performance-%s.csv' % images_dir.split('/')[0])
     if not os.path.exists(test_file):
-        os.system('echo "epoch,TP,FP,FN,precision,recall" > %s' % test_file)
+        os.system('echo "epoch,TP,FP,FN,precision,recall,F1" > %s' % test_file)
     os.system('echo "%s" >> %s' % (perf_str2, test_file))
 
 
