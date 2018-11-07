@@ -1,12 +1,13 @@
 version = "2s"
+net_params = {'backbone': 'resnet50', 'add_extra_block': False}
 
 epoch = 60000
-learning_rate1 = 1e-3  # 0.25e-3  # 1e-3
-learning_rate2 = 1e-2  #learning_rate1  # 1e-2
+learning_rate1 = 1e-3  # 1e-3
+learning_rate2 = 1e-3  #learning_rate1  # 1e-2
 step2_start = 100
 
 all_trains = 1000
-batch_size = 8 #24
+batch_size = 24
 momentum = 0.9
 weight_decay = 5e-4
 dilation = True
@@ -14,7 +15,7 @@ use_crop = False
 use_rotate = True
 # iterations = 10
 gpu = True
-multi_gpu = False  # only useful when gpu=True
+multi_gpu = True  # only useful when gpu=True
 pixel_weight = 2
 link_weight = 1
 
@@ -34,10 +35,9 @@ neg_pos_ratio = 3  # parameter r in paper
 train_images_dir = "train_images/images/"
 train_labels_dir = "train_images/ground_truth/"
 retrain_model_index = 26200 # retrain from which model, e.g. ${saving_model_dir}/156600.mdl
-test_model_index = 300 # test for which model, e.g. ${saving_model_dir}/156600.mdl
+test_model_index = 43800 # test for which model, e.g. ${saving_model_dir}/156600.mdl
 test_batch = 1
 
 test_images_dir = "test_images/images/"
 test_labels_dir = "test_images/ground_truth/"
 all_tests = 500
-
