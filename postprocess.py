@@ -46,11 +46,13 @@ def mask_to_box(pixel_mask, link_mask, neighbors=8, scale=4):
     """
     def distance(a, b):
         return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2
+
     def short_side_filter(bounding_box):
         for i, point in enumerate(bounding_box):
             if distance(point, bounding_box[(i+1)%4]) < 5**2:
                 return True # ignore it
         return False # do not ignore
+
     batch_size = link_mask.size(0)
     mask_height = link_mask.size(2)
     mask_width = link_mask.size(3)
@@ -58,7 +60,7 @@ def mask_to_box(pixel_mask, link_mask, neighbors=8, scale=4):
     # print(pixel_class.shape)
     if DEBUG:
         text_score = pixel_class[0, 1].cpu().numpy()
-        vis.image(text_score, opts=dict(caption='text pred'))
+        # vis.image(text_score, opts=dict(caption='text pred'))
         vis.image((text_score > 0.7).astype(np.float32), opts=dict(caption='text pred bool'))
 
     pixel_class = pixel_class[:, 1] > 0.7
@@ -71,16 +73,16 @@ def mask_to_box(pixel_mask, link_mask, neighbors=8, scale=4):
         # print(link_mask[:, [2 * i, 2 * i + 1]].shape)
         tmp = nn.Softmax2d()(link_mask[:, [2 * i, 2 * i + 1]])
         if DEBUG:
-            vis.image(tmp[0, 1].cpu().numpy(), opts=dict(caption='neighbor %d' % i))
-            vis.image((tmp[0, 1].cpu().numpy() > 0).astype(np.float32),
-                      opts=dict(caption='neighbor %d' % i))
+            pass
+            #vis.image(tmp[0, 1].cpu().numpy(), opts=dict(caption='neighbor %d' % i))
+            #vis.image((tmp[0, 1].cpu().numpy() > 0.7).astype(np.float32), opts=dict(caption='neighbor %d' % i))
 
         # print(tmp.shape)
         link_neighbors[:, i] = tmp[:, 1] > 0.7
         # link_neighbors[:, i] = link_mask[:, 2 * i + 1] > link_mask[:, 2 * i] 
         link_neighbors[:, i] = link_neighbors[:, i] & pixel_class
         if DEBUG:
-            vis.image(link_neighbors[0, i].cpu().numpy(), opts=dict(caption='neighbor %d' % i))
+            pass #vis.image(link_neighbors[0, i].cpu().numpy().astype(np.float32), opts=dict(caption='neighbor %d' % i))
 
     # res_mask = np.zeros([batch_size, mask_height, mask_width], dtype=np.uint8)
     all_boxes = []
@@ -88,25 +90,26 @@ def mask_to_box(pixel_mask, link_mask, neighbors=8, scale=4):
     for i in range(batch_size):
         res_mask = func(pixel_class[i], link_neighbors[i])
         box_num = np.amax(res_mask)
+        if DEBUG:
+            x = res_mask.astype(np.float32)
+            x = np.divide(x, box_num)
+            vis.image(x)
+
         # print(res_mask.any())
         bounding_boxes = []
         for i in range(1, box_num + 1):
             box_mask = (res_mask == i).astype(np.uint8)
             # res_masks.append(box_mask)
             if box_mask.sum() < 100:
-                pass
-                # print("<150")
-                # continue
+                pass  #continue
             box_mask, contours, _ = cv2.findContours(box_mask, mode=cv2.RETR_EXTERNAL, method=cv2.CHAIN_APPROX_NONE)
             # print(contours[0])
             bounding_box = cv2.minAreaRect(contours[0])
             bounding_box = cv2.boxPoints(bounding_box)
             if short_side_filter(bounding_box):
-                # print("<5")
-                pass
                 continue
             # bounding_box = bounding_box.reshape(8)
-            bounding_box = np.clip(bounding_box * scale, 0, 128 * scale - 1).astype(np.int)
+            bounding_box = (bounding_box * scale).astype(np.int) #np.clip(bounding_box * scale, 0, 128 * scale - 1).astype(np.int)
             # import IPython
             # IPython.embed()
             bounding_boxes.append(bounding_box)

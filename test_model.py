@@ -110,9 +110,8 @@ def test_on_train_dataset(my_net, out_dir, epoch, train_images_dir, train_labels
             image = ImgTransform.UnzeroMeanImage(image, mean[0], mean[1], mean[2])
             image = ImgFormat.ImgColorFormat(image, from_color="RGB", to_color="BGR")
             # color : gt = red, ignore = yellow, detection = blue
-            image = visualize_label(image, sample["label"]["coor"], color=(0, 0, 255),
-                                    ignore=sample["label"]["ignore"])
-            image = visualize_label(image, my_labels, color=(255, 0, 0))
+            image = visualize_label(image, sample["label"]["coor"], color=(0, 0, 255), ignore=sample["label"]["ignore"])
+            image = visualize_label(image, my_labels, color=(255, 0, 0), thickness=2)
             cv2.imwrite("%s/img_%d.jpg" % (results_dir, i), image)
         true_pos += res[0]
         false_pos += res[1]
@@ -138,7 +137,7 @@ def test_on_train_dataset(my_net, out_dir, epoch, train_images_dir, train_labels
     os.system('echo "%s" >> %s' % (perf_str2, test_file))
 
 
-def visualize_label(img, boxes, color=(0, 255, 0), ignore=None):
+def visualize_label(img, boxes, color=(0, 255, 0), ignore=None, thickness=1):
     """
     img: HWC
     boxes: array of num * 4 * 2
@@ -146,9 +145,9 @@ def visualize_label(img, boxes, color=(0, 255, 0), ignore=None):
     boxes = np.array(boxes).reshape(-1, 4, 2)
     img = np.ascontiguousarray(img)
     if ignore is None:
-        cv2.drawContours(img, boxes, -1, color, thickness=1)
+        cv2.drawContours(img, boxes, -1, color, thickness=thickness)
     else:
         for box, is_ignore in zip(boxes, ignore):
             color_box = (0, 255, 255) if is_ignore else color
-            cv2.drawContours(img, np.expand_dims(box, 0), -1, color_box, thickness=1)
+            cv2.drawContours(img, np.expand_dims(box, 0), -1, color_box, thickness=thickness)
     return img

@@ -83,7 +83,7 @@ def train(epoch, dataloader, my_net, loss, optimizer, scheduler, device, start_e
             batch_logs = {'loss': total_loss.tolist()}
             callbacks_cont.on_batch_end(i_batch, batch_logs)
 
-        if i_epoch > 0 and i_epoch % 100 == 0:
+        if i_epoch > 0 and i_epoch % 50 == 0:
             checkpoint = {'epoch': i_epoch,
                           'state_dict': my_net.state_dict(),
                           'optimizer': optimizer.state_dict()}
@@ -174,9 +174,10 @@ if __name__ == "__main__":
         epoch = config.test_model_index
         model = net.PixelLinkNet(**config.net_params)
 
+        vis_per_img = int(math.ceil(config.all_trains / 100.0))
         test_on_train_dataset(model, out_dir, epoch, config.train_images_dir, config.train_labels_dir,
                           config.all_trains, config.mean, config.version,
                           image_size_train=config.image_size_train,
                           image_size_test=config.image_size_test,
-                          gpu=config.gpu, multi_gpu=config.multi_gpu, vis_per_img=1)
+                          gpu=config.gpu, multi_gpu=config.multi_gpu, vis_per_img=vis_per_img)
         # test_model()
