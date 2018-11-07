@@ -3,8 +3,8 @@ net_params = {'backbone': 'resnet50', 'add_extra_block': False}
 
 epoch = 60000
 learning_rate1 = 1e-3  # 1e-3
-learning_rate2 = learning_rate1  # 1e-2
-step2_start = 100
+learning_rate2 = 1e-3  #learning_rate1  # 1e-2
+step2_start = 500
 
 all_trains = 1000
 batch_size = 12 #24

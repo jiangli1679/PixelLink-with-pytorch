@@ -6,7 +6,7 @@ learning_rate2 = 1e-2  #learning_rate1  # 1e-2
 step2_start = 100
 
 all_trains = 1000
-batch_size = 8 #24
+batch_size = 24
 momentum = 0.9
 weight_decay = 5e-4
 dilation = True
@@ -14,7 +14,7 @@ use_crop = False
 use_rotate = True
 # iterations = 10
 gpu = True
-multi_gpu = False  # only useful when gpu=True
+multi_gpu = True  # only useful when gpu=True
 pixel_weight = 2
 link_weight = 1
 
