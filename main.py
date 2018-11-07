@@ -37,7 +37,8 @@ config.net_params['version'] = config.version
 out_dir = "results/%s" % exp_name
 
 
-def train(epoch, dataloader, my_net, loss, optimizer, scheduler, device, start_epoch=0):
+def train(epoch, dataloader, my_net, loss, optimizer, scheduler, device, start_epoch=0,
+          test_datasets={}, vis_per_img=10):
     global trainer, callbacks_cont
 
     logs = {'batch_size': config.batch_size, 'num_batches': len(dataloader),
@@ -90,11 +91,17 @@ def train(epoch, dataloader, my_net, loss, optimizer, scheduler, device, start_e
                           'optimizer': optimizer.state_dict()}
             torch.save(checkpoint, os.path.join(out_dir, 'snapshots', 'epoch_%08d.mdl' % i_epoch))
 
+            for benchmark_name, datasets_test in test_datasets.items():
+                results_dir = os.path.join(out_dir, '%s_e%08d' % (benchmark_name, i_epoch))
+                test_file = os.path.join(out_dir, 'performance-%s.csv' % datasets_test.images_dir.split('/')[0])
+                test(my_net, datasets_test, i_epoch, out_dir, results_dir, test_file,
+                     gpu=config.gpu, multi_gpu=config.multi_gpu, vis_per_img=vis_per_img)
+
         epoch_logs.update(trainer.history.batch_metrics)
         callbacks_cont.on_epoch_end(i_epoch, logs=epoch_logs)
 
 
-def main(retrain=False):
+def main(retrain=False, test_datasets={}, vis_per_img=10):
     res_dir = os.path.join(out_dir, 'snapshots')
     if not os.path.exists(res_dir):
         os.makedirs(res_dir)
@@ -106,7 +113,10 @@ def main(retrain=False):
             if param_name.startswith('__'):
                 continue
             param_value = getattr(config, param_name)
-            f.write('%s = %s\n' % (param_name, param_value))
+            if isinstance(param_value, str):
+                f.write('%s = "%s"\n' % (param_name, param_value))
+            else:
+                f.write('%s = %s\n' % (param_name, param_value))
 
     dataset = datasets.PixelLinkIC15Dataset(config.train_images_dir, config.train_labels_dir,
                                             all_trains=config.all_trains, version=config.version,
@@ -154,7 +164,7 @@ def main(retrain=False):
         model_files = glob.glob(snapshots_dir + '/epoch_*')
         if model_files:
             resume_path = sorted(model_files)[-1]
-            start_epoch = int(os.path.basename(resume_path)[len('epoch_'):-4])
+            start_epoch = 1 + int(os.path.basename(resume_path)[len('epoch_'):-4])
             print('Loading snapshot from : %s' % resume_path)
             checkpoint = torch.load(resume_path)
             model.load_state_dict(checkpoint['state_dict'])
@@ -165,17 +175,22 @@ def main(retrain=False):
     else:
         start_epoch = 0
 
-    train(config.epoch, dataloader, model, loss, optimizer, scheduler, device, start_epoch=start_epoch)
+    train(config.epoch, dataloader, model, loss, optimizer, scheduler, device, start_epoch=start_epoch,
+          test_datasets=test_datasets, vis_per_img=vis_per_img)
 
 
 if __name__ == "__main__":
     if args.retrain or args.train:
-        main(retrain=args.retrain)
+        dataset_train = datasets.PixelLinkIC15Dataset(config.train_images_dir, config.train_labels_dir,
+                                                      train=False, all_trains=config.all_trains,
+                                                      version=config.version, mean=config.mean,
+                                                      image_size_test=config.image_size_test)
+
+        vis_per_img = int(math.ceil(config.all_trains / 100.0))
+        main(retrain=args.retrain, test_datasets={'benchmark-train': dataset_train}, vis_per_img=vis_per_img)
     else:
         epoch = config.test_model_index
         model = net.PixelLinkNet(**config.net_params)
-
-        vis_per_img = int(math.ceil(config.all_trains / 100.0))
 
         if args.test:
             images_dir = config.test_images_dir
@@ -188,9 +203,13 @@ if __name__ == "__main__":
             num_images = config.all_trains
             results_dir = os.path.join(out_dir, 'benchmark-train_e%08d' % epoch)
 
-        test(model, out_dir, epoch, results_dir,
-             images_dir, labels_dir, num_images,
-             config.mean, config.version,
-             image_size=config.image_size_test,
+        vis_per_img = int(math.ceil(num_images / 100.0))
+
+        test_file = os.path.join(out_dir, 'performance-%s.csv' % images_dir.split('/')[0])
+        dataset = datasets.PixelLinkIC15Dataset(images_dir, labels_dir, train=False,
+                                                all_trains=num_images, version=config.version,
+                                                mean=config.mean,
+                                                image_size_test=config.image_size_test)
+        test(model, dataset, epoch, out_dir, results_dir, test_file,
              gpu=config.gpu, multi_gpu=config.multi_gpu, vis_per_img=vis_per_img)
         # test_model()

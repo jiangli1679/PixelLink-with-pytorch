@@ -70,13 +70,8 @@ def comp_gt_and_output(my_labels, gt_labels, threshold):
     return true_pos, false_pos, false_neg
 
 
-def test(my_net, exp_dir, epoch, results_dir,
-         images_dir, labels_dir, num_images,
-         mean, version, image_size=(512, 512),
+def test(my_net, dataset, epoch, exp_dir, results_dir, test_file,
          gpu=True, multi_gpu=False, vis_per_img=10):
-    dataset = datasets.PixelLinkIC15Dataset(images_dir, labels_dir, train=False,
-                                            all_trains=num_images, version=version, mean=mean,
-                                            image_size_test=image_size)
     # dataloader = DataLoader(dataset, batch_size=config.batch_size, shuffle=False)
     if gpu:
         device = torch.device("cuda:0")
@@ -103,7 +98,7 @@ def test(my_net, exp_dir, epoch, results_dir,
         if i % vis_per_img == 0:
             image = image.squeeze(0).cpu().numpy()
             image = ImgFormat.ImgOrderFormat(image, from_order="CHW", to_order="HWC")
-            image = ImgTransform.UnzeroMeanImage(image, mean[0], mean[1], mean[2])
+            image = ImgTransform.UnzeroMeanImage(image, dataset.mean[0], dataset.mean[1], dataset.mean[2])
             image = ImgFormat.ImgColorFormat(image, from_color="RGB", to_color="BGR")
             # color : gt = red, ignore = yellow, detection = blue
             image = visualize_label(image, sample["label"]["coor"], color=(0, 0, 255), ignore=sample["label"]["ignore"])
@@ -127,7 +122,6 @@ def test(my_net, exp_dir, epoch, results_dir,
             i, true_pos, false_pos, false_neg, precision, recall, F))
 
     perf_str2 = "%d, %d,%d,%d,%f,%f,%f" % (epoch, true_pos, false_pos, false_neg, precision, recall, F)
-    test_file = os.path.join(exp_dir, 'performance-%s.csv' % images_dir.split('/')[0])
     if not os.path.exists(test_file):
         os.system('echo "epoch,TP,FP,FN,precision,recall,F1" > %s' % test_file)
     os.system('echo "%s" >> %s' % (perf_str2, test_file))
