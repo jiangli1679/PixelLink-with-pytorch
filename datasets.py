@@ -104,7 +104,7 @@ class PixelLinkIC15Dataset(ICDAR15Dataset):
         pixel_mask, neg_pixel_mask, pixel_pos_weight, link_mask = \
             PixelLinkIC15Dataset.label_to_mask_and_pixel_pos_weight(label, list(image.shape[1:]), version=self.version)
 
-        if DEBUG:
+        if False:  #DEBUG:
             for i_mask, mask in enumerate([pixel_mask, neg_pixel_mask]):
                 img_vis = mask.cpu().numpy().copy()
                 img_vis_resized = cv2.resize(img_vis.astype(np.float32), (image.size(1), image.size(2)))
@@ -152,8 +152,7 @@ class PixelLinkIC15Dataset(ICDAR15Dataset):
             labels, img, angle = ImgTransform.RotateImageWithLabel(labels, data=img)
         # crop
         if crop_rand > 0.5:
-            scale = 0.1 + random.random() * 0.9
-            labels, img, img_range = ImgTransform.CropImageWithLabel(labels, data=img, scale=scale)
+            labels, img, img_range = ImgTransform.CropImageWithLabel(labels, data=img)
             labels = PixelLinkIC15Dataset.filter_labels(labels, method="msi")
             labels = PixelLinkIC15Dataset.filter_labels(labels, method="rai")
 

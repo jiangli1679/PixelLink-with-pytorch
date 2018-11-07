@@ -19,7 +19,7 @@ class PixelLinkNet(nn.Module):
         self.add_extra_block = add_extra_block
         self.pretrained = pretrained
 
-        # blocks resolution : x2, x4, x8, x16
+        # blocks resolution : x2, x4, x8, x16, x32
         if backbone == 'vgg16':
             backbone = models.vgg16(pretrained=pretrained)
             self.blocks = [backbone.features[:9],      # conv1_1, conv1_2, conv2_1, conv2_2

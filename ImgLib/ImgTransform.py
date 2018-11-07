@@ -121,16 +121,17 @@ def CropImage(filename=None, data=None, start=None, end=None, scale=None, ratio=
     if (start is not None) and (end is not None):
         img = img.crop(start[0], start[1], end[0], end[1])
         return img, [start[0], start[1], end[0], end[1]]
-    w, h = img.size
-    area = w * h
-    if ratio is None:
+
+    if scale is None and ((start is None) and (end is None)):  # crop area [0.1, 1.0]
+        scale = 0.1 + random.random() * 0.9
+    if ratio is None:  # crop ar [0.5, 2.0]
         ratio = 0.5 + random.random() * 1.5
-    if scale is None:
-        raise ValueError("either start/end or scale should be given")
-    new_area = area * scale
+
+    w, h = img.size
+    area = scale * w * h
     for attempt in range(10):  
-        new_h = int(round(math.sqrt(new_area / ratio)))
-        new_w = int(round(math.sqrt(new_area * ratio)))
+        new_h = int(round(math.sqrt(area / ratio)))
+        new_w = int(round(math.sqrt(area * ratio)))
         if new_h < h and new_w < w:
             new_h_start = random.randint(0, h - new_h)
             new_w_start = random.randint(0, w - new_w)
@@ -140,6 +141,7 @@ def CropImage(filename=None, data=None, start=None, end=None, scale=None, ratio=
         new_h = new_w
         new_h_start = (h - new_h) // 2
         new_w_start = (w - new_w) // 2
+
     start = [new_w_start, new_h_start]
     end = [new_w_start + new_w, new_h_start + new_h]
     img = img.crop((new_w_start, new_h_start, new_w_start + new_w, new_h_start + new_h))
