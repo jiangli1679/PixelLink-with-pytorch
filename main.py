@@ -95,7 +95,8 @@ def train(epoch, dataloader, my_net, loss, optimizer, scheduler, device, start_e
                 results_dir = os.path.join(out_dir, '%s_e%08d' % (benchmark_name, i_epoch))
                 test_file = os.path.join(out_dir, 'performance-%s.csv' % datasets_test.images_dir.split('/')[0])
                 test(my_net, datasets_test, i_epoch, out_dir, results_dir, test_file,
-                     gpu=config.gpu, multi_gpu=config.multi_gpu, vis_per_img=vis_per_img)
+                     gpu=config.gpu, multi_gpu=config.multi_gpu, vis_per_img=vis_per_img,
+                     weights_preloaded=True)
 
         epoch_logs.update(trainer.history.batch_metrics)
         callbacks_cont.on_epoch_end(i_epoch, logs=epoch_logs)
