@@ -27,6 +27,7 @@ class PixelLinkNet(nn.Module):
                            backbone.features[16:23],   # conv4_1 : conv4_3
                            backbone.features[23:30]]   # conv5_1 : conv5_3
             num_features = [128, 256, 512, 512]
+            self.pad_modulo = 16
         elif backbone.startswith('resnet'):
             f = getattr(models, backbone)
             backbone = f(pretrained=pretrained)
@@ -40,6 +41,7 @@ class PixelLinkNet(nn.Module):
                 num_features = num_features + [64, 128, 256, 512]
             else:  # resnet50 / resnet101 / resnet152
                 num_features = num_features + [4*64, 4*128, 4*256, 4*512]
+            self.pad_modulo = 32
         self.blocks = nn.ModuleList(self.blocks)
 
         if not self.pretrained:
@@ -70,8 +72,18 @@ class PixelLinkNet(nn.Module):
 
         self.num_blocks = len(self.blocks)
         self.last_branch = 0 if self.version == '2s' else 1
+        self.out_scale = 2 if self.version == '2s' else 4
 
     def forward(self, x):
+        # pad images
+        h_orig = x.size(2)
+        w_orig = x.size(3)
+        pad_h = h_orig % self.pad_modulo
+        pad_w = w_orig % self.pad_modulo
+        if pad_h > 0 or pad_w > 0:
+            pad = (0, pad_w, 0, pad_h)
+            x = nn.functional.pad(x, pad)
+
         outputs_backbone = self.num_blocks * [None]
         for i_block, block in enumerate(self.blocks):
             x = block(x)
@@ -97,6 +109,16 @@ class PixelLinkNet(nn.Module):
 
         out[0] = self.final_1(out[0])
         out[1] = self.final_2(out[1])
+        # crop edges due to padding
+        if pad_h > 0:
+            h_out = int(h_orig / self.out_scale)
+            out[0] = out[0][:, :, :h_out, :]
+            out[1] = out[1][:, :, :h_out, :]
+        if pad_w > 0:
+            w_out = int(w_orig / self.out_scale)
+            out[0] = out[0][:, :, :, :w_out]
+            out[1] = out[1][:, :, :, :w_out]
+
         return out
 
 
