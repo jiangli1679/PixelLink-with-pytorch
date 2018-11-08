@@ -84,7 +84,7 @@ def train(epoch, dataloader, my_net, loss, optimizer, scheduler, device, start_e
             batch_logs = {'loss': total_loss.tolist()}
             callbacks_cont.on_batch_end(i_batch, batch_logs)
 
-        if i_epoch > 0 and i_epoch % 10 == 0:
+        if i_epoch > 0 and i_epoch % 50 == 0:
             checkpoint = {'epoch': i_epoch,
                           'state_dict': my_net.state_dict(),
                           'optimizer': optimizer.state_dict()}
