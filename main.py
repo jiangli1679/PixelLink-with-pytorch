@@ -23,9 +23,8 @@ from torchsample.modules import ModuleTrainer
 
 parser = argparse.ArgumentParser(description='')
 parser.add_argument('exp', type=str, help='experiment name')
-parser.add_argument('--train', type=bool, default=False, help='True for train, False for test')  # default for test
-parser.add_argument('--retrain', type=bool, default=False, help='True for retrain, False for train')  # default for test
-parser.add_argument('--test', type=bool, default=False, help='True for evaluating on test set')
+parser.add_argument('--mode', type=str, default='train', help='train / retrain / benchmark-train / benchamrk-test')
+parser.add_argument('--epoch', type=int, default=None, help='epoch to be chosen (relevant only for benchmark modes)')
 # parser.add_argument('change', metavar='N', type=int, help='an integer for change')
 args = parser.parse_args()
 
@@ -85,7 +84,7 @@ def train(epoch, dataloader, my_net, loss, optimizer, scheduler, device, start_e
             batch_logs = {'loss': total_loss.tolist()}
             callbacks_cont.on_batch_end(i_batch, batch_logs)
 
-        if i_epoch > 0 and i_epoch % 50 == 0:
+        if i_epoch > 0 and i_epoch % 10 == 0:
             checkpoint = {'epoch': i_epoch,
                           'state_dict': my_net.state_dict(),
                           'optimizer': optimizer.state_dict()}
@@ -97,6 +96,7 @@ def train(epoch, dataloader, my_net, loss, optimizer, scheduler, device, start_e
                 test(my_net, datasets_test, i_epoch, out_dir, results_dir, test_file,
                      gpu=config.gpu, multi_gpu=config.multi_gpu, vis_per_img=vis_per_img,
                      weights_preloaded=True)
+                my_net.train()
 
         epoch_logs.update(trainer.history.batch_metrics)
         callbacks_cont.on_epoch_end(i_epoch, logs=epoch_logs)
@@ -181,24 +181,35 @@ def main(retrain=False, test_datasets={}, vis_per_img=10):
 
 
 if __name__ == "__main__":
-    if args.retrain or args.train:
+    if args.mode in ['train', 'retrain']:
         dataset_train = datasets.PixelLinkIC15Dataset(config.train_images_dir, config.train_labels_dir,
                                                       train=False, all_trains=config.all_trains,
                                                       version=config.version, mean=config.mean,
                                                       image_size_test=config.image_size_test)
+        vis_per_img_train = int(math.ceil(config.all_trains / 100.0))
 
-        vis_per_img = int(math.ceil(config.all_trains / 100.0))
-        main(retrain=args.retrain, test_datasets={'benchmark-train': dataset_train}, vis_per_img=vis_per_img)
+        dataset_test = datasets.PixelLinkIC15Dataset(config.test_images_dir, config.test_labels_dir,
+                                                      train=False, all_trains=config.all_tests,
+                                                      version=config.version, mean=config.mean,
+                                                      image_size_test=config.image_size_test)
+        vis_per_img_test = int(math.ceil(config.all_tests / 100.0))
+
+        retrain = args.mode == 'retrain'
+
+        main(retrain=retrain,
+             test_datasets={'benchmark-train': dataset_train, 'benchmark-test': dataset_test},
+             vis_per_img=vis_per_img_train)
     else:
-        epoch = config.test_model_index
+        epoch = args.epoch  #config.test_model_index
+        assert epoch is not None
         model = net.PixelLinkNet(**config.net_params)
 
-        if args.test:
+        if args.mode == 'benchmark-test':
             images_dir = config.test_images_dir
             labels_dir = config.test_labels_dir
             num_images = config.all_tests
             results_dir = os.path.join(out_dir, 'benchmark-test_e%08d' % epoch)
-        else:
+        elif args.mode == 'benchmark-train':
             images_dir = config.train_images_dir
             labels_dir = config.train_labels_dir
             num_images = config.all_trains

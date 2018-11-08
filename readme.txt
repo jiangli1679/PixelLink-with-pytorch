@@ -1,8 +1,10 @@
 INSTALL : 
 
-conda create --name myenv --file spec-file.txt
+conda create --name pixelink --file spec-file.txt
 (the spec-file was create with "conda list --explicit > spec-file.txt")
 
+after the environment has been create you should activate it with :
+source activate pixelink
   
 COMMANDS : 
 

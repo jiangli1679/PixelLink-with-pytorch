@@ -73,17 +73,20 @@ def comp_gt_and_output(my_labels, gt_labels, threshold):
 def test(my_net, dataset, epoch, exp_dir, results_dir, test_file,
          gpu=True, multi_gpu=False, vis_per_img=10, weights_preloaded=False):
     # dataloader = DataLoader(dataset, batch_size=config.batch_size, shuffle=False)
+    if gpu:
+        device = torch.device("cuda:0")
+    else:
+        device = torch.device("cpu")
+
     if not weights_preloaded:
         if gpu:
-            device = torch.device("cuda:0")
             my_net = my_net.cuda()
             if multi_gpu:
                 my_net = nn.DataParallel(my_net)
-        else:
-            device = torch.device("cpu")
         checkpoint = torch.load(os.path.join(exp_dir, 'snapshots', 'epoch_%08d.mdl' % epoch))
         my_net.load_state_dict(checkpoint['state_dict'])
-        my_net.eval()
+
+    my_net.eval()
 
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)

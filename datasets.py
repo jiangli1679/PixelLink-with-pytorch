@@ -368,9 +368,9 @@ class PixelLinkIC15Dataset(ICDAR15Dataset):
                 link_mask_shift = np.zeros(link_mask_size, dtype=np.uint8)
                 w_index = weight_tmp_nonzero[1]
                 h_index = weight_tmp_nonzero[0]
-                w_index1 = np.clip(w_index + 1, a_min=None, a_max=link_mask_size[1] - 1)
+                w_index1 = np.clip(w_index + 1, a_min=None, a_max=link_mask_size[2] - 1)
                 w_index_1 = np.clip(w_index - 1, a_min=0, a_max=None)
-                h_index1 = np.clip(h_index + 1, a_min=None, a_max=link_mask_size[2] - 1)
+                h_index1 = np.clip(h_index + 1, a_min=None, a_max=link_mask_size[1] - 1)
                 h_index_1 = np.clip(h_index - 1, a_min=0, a_max=None)
                 link_mask_shift[0][h_index1, w_index1] = 1
                 link_mask_shift[1][h_index1, w_index] = 1
